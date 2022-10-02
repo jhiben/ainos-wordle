@@ -1,9 +1,110 @@
 ﻿@page "/"
+@using BlazorApp.Shared
+@inject HttpClient Http
 
-<PageTitle>Index</PageTitle>
+<PageTitle>IT Wordle</PageTitle>
 
-<h1>Hello, world!</h1>
+<h1>IT Wordle</h1>
 
-Welcome to your new app.
+@for (int i = 0; i <= attempts.Count; i++)
+{
+    <div>
+        @for (int j = 0; j < max; j++)
+        {
+            var value = i >= attempts.Count ? selected[j] : attempts[i][j];
+            var style = $"width: 40px; border: 3px solid {(value.IsCorrect ? "green" : value.IsInWrongPlace ? "orange" : "grey")}";
 
-<SurveyPrompt Title="How is Blazor working for you?" />
+            <input type="text" class="m-1" style="@style" readonly value="@value.Letter" />
+        }
+    </div>
+}
+
+@if (isCompleted)
+{
+    <h3 style="color: green">FOUND!</h3>
+}
+
+@foreach (var letter in allLetters)
+{
+    <button class="btn btn-secondary m-1" style="width: 40px" @onclick="() => Click(letter)" disabled="@(cursor == 5 || isCompleted || disabledLetters.Contains(letter))">@letter</button>
+}
+
+<hr />
+
+<button class="btn btn-warning" @onclick="Undo" disabled="@(cursor == 0 || isCompleted)">UNDO</button>
+<button class="btn btn-danger" @onclick="Reset">RESET</button>
+
+@code {
+    private const int max = 5;
+
+    private bool isCompleted = false;
+
+    private int cursor = 0;
+
+    private bool isValidating = false;
+
+    private List<LetterAttempt[]> attempts = new();
+
+    private LetterAttempt[] selected = EmptySelection();
+
+    private char[] allLetters = Enumerable.Range('a', 'z' - 'a' + 1).Select(i => (char)i).ToArray();
+
+    private HashSet<char> disabledLetters = new();
+
+    private async Task Click(char letter)
+    {
+        if (cursor < max)
+        {
+            selected[cursor].Letter = letter;
+            cursor++;
+        }
+
+        if (cursor == max)
+        {
+            await RowDone();
+        }
+    }
+
+    private async Task RowDone()
+    {
+        var word = string.Concat(selected.Select(s => s.Letter));
+        var result = await Http.GetFromJsonAsync<SubmitWordleResult>($"api/wordle?word={word}") ?? new(Array.Empty<LetterAttempt>());
+
+        var unused = result.Attempts.Where(s => s.IsUseless).Select(s => s.Letter);
+
+        disabledLetters = new(disabledLetters.Concat(unused));
+
+        isCompleted = result.Attempts.All(s => s.IsCorrect);
+
+        if (isCompleted)
+        {
+            selected = result.Attempts.ToArray();
+        }
+        else
+        {
+            attempts.Add(result.Attempts.ToArray());
+            selected = EmptySelection();
+            cursor = 0;
+        }
+    }
+
+    private void Undo()
+    {
+        if (cursor > 0)
+        {
+            cursor--;
+            selected[cursor].Reset();
+        }
+    }
+
+    private void Reset()
+    {
+        cursor = 0;
+        disabledLetters = new();
+        attempts = new();
+        selected = EmptySelection();
+        isCompleted = false;
+    }
+
+    private static LetterAttempt[] EmptySelection() => Enumerable.Range(0, max).Select(_ => new LetterAttempt()).ToArray();
+}
