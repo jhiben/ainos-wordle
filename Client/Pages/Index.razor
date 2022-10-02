@@ -19,9 +19,18 @@
     </div>
 }
 
+@if (isValidating)
+{
+    <div class="spinner-border" role="status">
+        <span class="sr-only"></span>
+    </div>
+
+    <br />
+}
+
 @if (isCompleted)
 {
-    <h3 style="color: green">FOUND!</h3>
+    <h3 style="color: green">WELL DONE!</h3>
 }
 
 @foreach (var letter in allLetters)
@@ -67,6 +76,8 @@
 
     private async Task RowDone()
     {
+        isValidating = true;
+
         var word = string.Concat(selected.Select(s => s.Letter));
         var result = await Http.GetFromJsonAsync<SubmitWordleResult>($"api/wordle?word={word}") ?? new(Array.Empty<LetterAttempt>());
 
@@ -86,6 +97,8 @@
             selected = EmptySelection();
             cursor = 0;
         }
+
+        isValidating = false;
     }
 
     private void Undo()
